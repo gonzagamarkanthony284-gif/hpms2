@@ -3,6 +3,16 @@
 -- Created with full support for all system modules and relationships
 
 -- ============================================================================
+-- DATABASE INITIALIZATION
+-- ============================================================================
+
+-- Create database if not exists
+CREATE DATABASE IF NOT EXISTS hpms2_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- Use the database
+USE hpms2_db;
+
+-- ============================================================================
 -- CORE USER MANAGEMENT TABLES
 -- ============================================================================
 
