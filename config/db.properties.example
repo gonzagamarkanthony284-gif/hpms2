@@ -1,0 +1,14 @@
+# Example DB config for HPMS
+# Copy this file to config/db.properties and edit values for your environment.
+
+# H2 (default) - file-based database (no password)
+db.driver=org.h2.Driver
+db.url=jdbc:h2:file:./data/hpms;AUTO_SERVER=TRUE
+db.user=sa
+db.password=
+
+# For Postgres, comment above and uncomment below:
+# db.driver=org.postgresql.Driver
+# db.url=jdbc:postgresql://localhost:5432/hpms
+# db.user=hpms_user
+# db.password=yourStrongPassword

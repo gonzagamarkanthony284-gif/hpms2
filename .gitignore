@@ -1,0 +1,5 @@
+/bin/
+
+# local config and data directory for H2
+config/db.properties
+data/
