@@ -208,6 +208,18 @@ public class PatientRepository extends DatabaseRepository<String, Patient> {
     }
 
     /**
+     * Find patient by linked user ID.
+     */
+    public Optional<Patient> findByUserId(String userId) {
+        try {
+            return executeSingleQuery("SELECT * FROM patients WHERE user_id = ?", userId);
+        } catch (SQLException ex) {
+            System.err.println("[PatientRepository] Error finding by user id: " + ex.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    /**
      * Find all patients created after a given date.
      */
     public List<Patient> findCreatedAfter(LocalDate date) {

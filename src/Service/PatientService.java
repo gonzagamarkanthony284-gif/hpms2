@@ -1,7 +1,7 @@
 package Service;
 
 import Model.Patient;
-import Repository.InMemoryRepository;
+import Repository.PatientRepository;
 import Repository.Repository;
 import DTO.PatientSummaryDTO;
 import Model.Role;
@@ -19,19 +19,27 @@ public class PatientService {
     private final Repository<String, Patient> repo;
     // Simple runtime cache mapping usernames to profile data
     private final ConcurrentHashMap<String, PatientProfile> profilesByUsername = new ConcurrentHashMap<>();
-    // Store the latest provisioned credentials by patientId (transient, for display/testing only)
+    // Store the latest provisioned credentials by patientId (transient, for
+    // display/testing only)
     private final ConcurrentHashMap<String, ProvisionedAccount> provisionedAccounts = new ConcurrentHashMap<>();
     // Track archived patient IDs in-memory
     private final java.util.concurrent.ConcurrentSkipListSet<String> archivedIds = new java.util.concurrent.ConcurrentSkipListSet<>();
 
     // Singleton holder
-    private static final class Holder { static final PatientService INSTANCE = new PatientService(); }
-    public static PatientService getInstance() { return Holder.INSTANCE; }
+    private static final class Holder {
+        static final PatientService INSTANCE = new PatientService();
+    }
 
-    public PatientService() { this.repo = new InMemoryRepository<>(Patient::getId); }
+    public static PatientService getInstance() {
+        return Holder.INSTANCE;
+    }
+
+    public PatientService() {
+        this.repo = PatientRepository.getInstance();
+    }
 
     public Patient createPatient(String firstName, String lastName, LocalDate dob,
-                                 String gender, String phone, String email, String address) {
+            String gender, String phone, String email, String address) {
         Patient p = new Patient(firstName, lastName, dob, gender, phone, email, address);
         Patient saved = repo.save(p);
         // Auto-provision a user account for this patient
@@ -39,43 +47,56 @@ public class PatientService {
         return saved;
     }
 
-    public Optional<Patient> findById(String id) { return repo.findById(id); }
+    public Optional<Patient> findById(String id) {
+        return repo.findById(id);
+    }
 
-    public Collection<Patient> listAll() { return repo.findAll(); }
+    public Collection<Patient> listAll() {
+        return repo.findAll();
+    }
 
     // NEW: active (non-archived) patients
     public java.util.List<Patient> listActive() {
         return repo.findAll().stream()
-            .filter(p -> p != null && !archivedIds.contains(p.getId()))
-            .collect(Collectors.toList());
+                .filter(p -> p != null && !archivedIds.contains(p.getId()))
+                .collect(Collectors.toList());
     }
 
     // NEW: archived patients
     public java.util.List<Patient> listArchived() {
         return repo.findAll().stream()
-            .filter(p -> p != null && archivedIds.contains(p.getId()))
-            .collect(Collectors.toList());
+                .filter(p -> p != null && archivedIds.contains(p.getId()))
+                .collect(Collectors.toList());
     }
 
     // NEW: archive by id (soft-delete)
     public boolean archivePatient(String id) {
-        if (id == null || id.isBlank()) return false;
-        if (repo.findById(id).isEmpty()) return false;
+        if (id == null || id.isBlank())
+            return false;
+        if (repo.findById(id).isEmpty())
+            return false;
         archivedIds.add(id);
         return true;
     }
 
     // NEW: unarchive by id
     public boolean unarchivePatient(String id) {
-        if (id == null || id.isBlank()) return false;
+        if (id == null || id.isBlank())
+            return false;
         return archivedIds.remove(id);
     }
 
-    public boolean deletePatient(String id) { return repo.delete(id); }
+    public boolean deletePatient(String id) {
+        return repo.delete(id);
+    }
 
-    /** Update an existing patient record with the provided object. Returns true if saved. */
+    /**
+     * Update an existing patient record with the provided object. Returns true if
+     * saved.
+     */
     public boolean updatePatient(Patient patient) {
-        if (patient == null || patient.getId() == null) return false;
+        if (patient == null || patient.getId() == null)
+            return false;
         repo.save(patient);
         return true;
     }
@@ -84,8 +105,10 @@ public class PatientService {
     public PatientProfile getProfileByUsername(String username) {
         return profilesByUsername.computeIfAbsent(username, k -> new PatientProfile());
     }
+
     public void saveProfile(String username, PatientProfile profile) {
-        if (username == null || username.isBlank() || profile == null) return;
+        if (username == null || username.isBlank() || profile == null)
+            return;
         profilesByUsername.put(username, profile);
     }
 
@@ -94,9 +117,11 @@ public class PatientService {
      * Age is computed from dateOfBirth. Other fields left null when not available.
      */
     public java.util.Optional<PatientSummaryDTO> getPatientSummaryById(String id) {
-        if (id == null || id.isBlank()) return java.util.Optional.empty();
+        if (id == null || id.isBlank())
+            return java.util.Optional.empty();
         java.util.Optional<Model.Patient> opt = findById(id);
-        if (opt.isEmpty()) return java.util.Optional.empty();
+        if (opt.isEmpty())
+            return java.util.Optional.empty();
         Model.Patient p = opt.get();
         PatientSummaryDTO dto = new PatientSummaryDTO();
         dto.setId(p.getId());
@@ -108,7 +133,8 @@ public class PatientService {
     }
 
     private Integer computeAge(java.time.LocalDate dob) {
-        if (dob == null) return null;
+        if (dob == null)
+            return null;
         java.time.Period period = java.time.Period.between(dob, java.time.LocalDate.now());
         return Math.max(0, period.getYears());
     }
@@ -166,7 +192,8 @@ public class PatientService {
         public String religion = "";
         public String preferredLanguage = "";
         public String preferredContactMethod = "";
-        // New fields to capture admission + payment / visit details from Admin registration UI
+        // New fields to capture admission + payment / visit details from Admin
+        // registration UI
         public String reasonForVisit = ""; // e.g. Consultation, Admission, Surgery
         public String referringDoctor = "";
         public String preferredPaymentMethod = ""; // e.g. Cash, Card
@@ -180,33 +207,51 @@ public class PatientService {
     public static class ProvisionedAccount {
         public final String username;
         public final String temporaryPassword; // display-only; not stored hashed here
-        public ProvisionedAccount(String u, String p) { this.username = u; this.temporaryPassword = p; }
-    }
 
-    /** Returns the last generated credentials for the given patientId, if any (for UI display). */
-    public Optional<ProvisionedAccount> getProvisionedAccountForPatient(String patientId) {
-         return Optional.ofNullable(provisionedAccounts.get(patientId));
-     }
+        public ProvisionedAccount(String u, String p) {
+            this.username = u;
+            this.temporaryPassword = p;
+        }
+    }
 
     /**
-     * Create a Patient record linked to an existing User without provisioning a new User account.
-     * This is used when a patient account is already created (e.g. admin added a user) and
+     * Returns the last generated credentials for the given patientId, if any (for
+     * UI display).
+     */
+    public Optional<ProvisionedAccount> getProvisionedAccountForPatient(String patientId) {
+        return Optional.ofNullable(provisionedAccounts.get(patientId));
+    }
+
+    /**
+     * Create a Patient record linked to an existing User without provisioning a new
+     * User account.
+     * This is used when a patient account is already created (e.g. admin added a
+     * user) and
      * we want to store the clinical Patient domain object.
      */
-    public Patient createPatientForUser(Model.User user, String firstName, String lastName, LocalDate dob, String gender, String phone, String address) {
-        if (user == null) throw new IllegalArgumentException("user required");
+    public Patient createPatientForUser(Model.User user, String firstName, String lastName, LocalDate dob,
+            String gender, String phone, String address) {
+        if (user == null)
+            throw new IllegalArgumentException("user required");
         String patientNumber = Model.Patient.generatePatientNumber();
-        Model.Patient p = new Model.Patient(user, patientNumber, dob == null ? LocalDate.now().minusYears(20) : dob, gender, null, null, address, phone, null, null);
+        Model.Patient p = new Model.Patient(user, patientNumber, dob == null ? LocalDate.now().minusYears(20) : dob,
+                gender, null, null, address, phone, null, null);
         repo.save(p);
         // link back to user
-        try { user.setLinkedPatientId(p.getId()); } catch (Exception ignored) {}
+        try {
+            user.setLinkedPatientId(p.getId());
+        } catch (Exception ignored) {
+        }
         return p;
     }
+
     // --- Internal helpers -------------------------------------------
     private void autoProvisionPatientAccount(Patient patient) {
-        if (patient == null) return;
+        if (patient == null)
+            return;
         UserService userService = UserService.getInstance();
-        String base = (patient.getFirstName() + "." + patient.getLastName()).toLowerCase().replaceAll("[^a-z0-9]+", ".");
+        String base = (patient.getFirstName() + "." + patient.getLastName()).toLowerCase().replaceAll("[^a-z0-9]+",
+                ".");
         String username = base;
         int attempt = 0;
         while (userService.findByUsername(username).isPresent()) {
@@ -222,24 +267,32 @@ public class PatientService {
             userService.createUser(username, tempPassword.toCharArray(), Role.PATIENT);
             // Attempt to locate created user and attach linkedPatientId where supported
             userService.findByUsername(username).ifPresent(u -> {
-                try { u.setLinkedPatientId(patient.getId()); } catch (Exception ignored) {}
+                try {
+                    u.setLinkedPatientId(patient.getId());
+                } catch (Exception ignored) {
+                }
             });
             provisionedAccounts.put(patient.getId(), new ProvisionedAccount(username, tempPassword));
         } catch (RuntimeException ex) {
-            // In case password policy or other issues, ensure we don't crash patient creation
+            // In case password policy or other issues, ensure we don't crash patient
+            // creation
             provisionedAccounts.remove(patient.getId());
         }
     }
 
     private String generateTempPassword(Patient p) {
-        // Pattern: Capitalized first name prefix + yyyy of DOB (or 1990 if null) + random 3-digit
+        // Pattern: Capitalized first name prefix + yyyy of DOB (or 1990 if null) +
+        // random 3-digit
         String first = (p.getFirstName() == null || p.getFirstName().isBlank()) ? "Patient" : p.getFirstName().trim();
-        String cap = first.substring(0, Math.min(1, first.length())).toUpperCase() + first.substring(Math.min(1, first.length())).toLowerCase();
+        String cap = first.substring(0, Math.min(1, first.length())).toUpperCase()
+                + first.substring(Math.min(1, first.length())).toLowerCase();
         String year = (p.getDateOfBirth() != null) ? String.valueOf(p.getDateOfBirth().getYear()) : "1990";
         int rnd = 100 + new Random().nextInt(900);
         String pwd = cap + year + rnd; // contains letters+digits, length >= 8 for most names
-        // Ensure policy compliance (>=8 chars, letters+digits). If too short, append more digits.
-        while (pwd.length() < 8) pwd += Integer.toString(new Random().nextInt(10));
+        // Ensure policy compliance (>=8 chars, letters+digits). If too short, append
+        // more digits.
+        while (pwd.length() < 8)
+            pwd += Integer.toString(new Random().nextInt(10));
         return pwd;
     }
 }
