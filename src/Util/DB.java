@@ -19,8 +19,10 @@ import java.util.Properties;
  * Defaults to an embedded H2 file database if no config provided.
  *
  * Notes:
- * - Add the H2 JDBC jar (or your chosen DB driver) to the project's classpath in Eclipse.
- * - The helper will attempt to execute `sql/schema.sql` once when `initDatabase()` is called.
+ * - Add the H2 JDBC jar (or your chosen DB driver) to the project's classpath
+ * in Eclipse.
+ * - The helper will attempt to execute `sql/schema.sql` once when
+ * `initDatabase()` is called.
  */
 public class DB {
     private static final Properties cfg = new Properties();
@@ -49,11 +51,15 @@ public class DB {
         String url = cfg.getProperty("db.url", DEFAULT_URL);
         String user = cfg.getProperty("db.user", DEFAULT_USER);
         String pass = cfg.getProperty("db.password", DEFAULT_PASS);
-        return DriverManager.getConnection(url, user, pass);
+        Connection conn = DriverManager.getConnection(url, user, pass);
+        // Ensure auto-commit is enabled to persist changes immediately
+        conn.setAutoCommit(true);
+        return conn;
     }
 
     /**
-     * Initialize the database by executing sql/schema.sql (if present) only when db.init=true.
+     * Initialize the database by executing sql/schema.sql (if present) only when
+     * db.init=true.
      */
     public static void initDatabase() {
         String initFlag = cfg.getProperty("db.init", "false");
@@ -63,14 +69,16 @@ public class DB {
         }
 
         Path schema = Paths.get("sql", "schema.sql");
-        if (!Files.exists(schema)) return;
+        if (!Files.exists(schema))
+            return;
         try (Connection c = getConnection(); Statement st = c.createStatement()) {
             StringBuilder sb = new StringBuilder();
             try (BufferedReader r = Files.newBufferedReader(schema, StandardCharsets.UTF_8)) {
                 String line;
                 while ((line = r.readLine()) != null) {
                     // skip SQL comments starting with --
-                    if (line.trim().startsWith("--")) continue;
+                    if (line.trim().startsWith("--"))
+                        continue;
                     sb.append(line).append('\n');
                 }
             }
@@ -78,11 +86,13 @@ public class DB {
             String[] parts = sb.toString().split(";\\s*\\n");
             for (String p : parts) {
                 String sql = p.trim();
-                if (sql.isEmpty()) continue;
+                if (sql.isEmpty())
+                    continue;
                 try {
                     st.execute(sql);
                 } catch (SQLException ex) {
-                    // log and continue - many scripts include IF NOT EXISTS so failures may be harmless
+                    // log and continue - many scripts include IF NOT EXISTS so failures may be
+                    // harmless
                     System.err.println("[DB] Failed to execute SQL statement: " + ex.getMessage());
                 }
             }
@@ -97,7 +107,8 @@ public class DB {
     public static boolean smokeTest() {
         try (Connection c = getConnection(); Statement s = c.createStatement()) {
             try (ResultSet rs = s.executeQuery("SELECT 1")) {
-                if (rs.next()) return true;
+                if (rs.next())
+                    return true;
             }
         } catch (SQLException ex) {
             System.err.println("[DB] smokeTest failed: " + ex.getMessage());

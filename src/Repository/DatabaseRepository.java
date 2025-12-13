@@ -10,46 +10,46 @@ import java.util.*;
  * Subclasses implement specific table operations via abstract methods.
  *
  * @param <ID> the identifier type (typically String for our models)
- * @param <T> the entity type
+ * @param <T>  the entity type
  */
 public abstract class DatabaseRepository<ID, T> implements Repository<ID, T> {
-    
+
     protected final String tableName;
-    
+
     public DatabaseRepository(String tableName) {
         this.tableName = tableName;
     }
-    
+
     /**
      * Get a database connection.
      */
     protected Connection getConnection() throws SQLException {
         return DB.getConnection();
     }
-    
+
     /**
      * Map a ResultSet row to the entity type.
      * Subclasses implement this to construct the entity from database columns.
      */
     protected abstract T mapResultSetToEntity(ResultSet rs) throws SQLException;
-    
+
     /**
      * Get the ID/primary key from an entity.
      */
     protected abstract ID getEntityId(T entity);
-    
+
     /**
      * Get the primary key column name.
      */
     protected abstract String getIdColumnName();
-    
+
     /**
      * Convert entity ID to SQL value.
      */
     protected Object idToSqlValue(ID id) {
         return id;
     }
-    
+
     /**
      * Save (insert or update) an entity.
      */
@@ -61,7 +61,7 @@ public abstract class DatabaseRepository<ID, T> implements Repository<ID, T> {
         } else {
             // Check if exists
             try (Connection conn = getConnection();
-                 Statement stmt = conn.createStatement()) {
+                    Statement stmt = conn.createStatement()) {
                 String query = "SELECT 1 FROM " + tableName + " WHERE " + getIdColumnName() + " = ?";
                 PreparedStatement pstmt = conn.prepareStatement(query);
                 pstmt.setObject(1, idToSqlValue(id));
@@ -78,17 +78,18 @@ public abstract class DatabaseRepository<ID, T> implements Repository<ID, T> {
             }
         }
     }
-    
+
     /**
      * Insert a new entity. Subclasses override to implement specific INSERT logic.
      */
     protected abstract T insertEntity(T entity);
-    
+
     /**
-     * Update an existing entity. Subclasses override to implement specific UPDATE logic.
+     * Update an existing entity. Subclasses override to implement specific UPDATE
+     * logic.
      */
     protected abstract T updateEntity(T entity);
-    
+
     /**
      * Find entity by ID.
      */
@@ -109,7 +110,7 @@ public abstract class DatabaseRepository<ID, T> implements Repository<ID, T> {
         }
         return Optional.empty();
     }
-    
+
     /**
      * Find all entities.
      */
@@ -117,9 +118,9 @@ public abstract class DatabaseRepository<ID, T> implements Repository<ID, T> {
     public Collection<T> findAll() {
         Collection<T> results = new ArrayList<>();
         try (Connection conn = getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery("SELECT * FROM " + tableName)) {
-            
+                Statement stmt = conn.createStatement();
+                ResultSet rs = stmt.executeQuery("SELECT * FROM " + tableName)) {
+
             while (rs.next()) {
                 results.add(mapResultSetToEntity(rs));
             }
@@ -128,7 +129,7 @@ public abstract class DatabaseRepository<ID, T> implements Repository<ID, T> {
         }
         return results;
     }
-    
+
     /**
      * Delete entity by ID.
      */
@@ -146,27 +147,58 @@ public abstract class DatabaseRepository<ID, T> implements Repository<ID, T> {
         }
         return false;
     }
-    
+
     /**
      * Helper method to execute an update/insert/delete query.
      */
     protected int executeUpdate(String sql, Object... params) throws SQLException {
-        try (Connection conn = getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+        Connection conn = null;
+        PreparedStatement stmt = null;
+        try {
+            conn = getConnection();
+            stmt = conn.prepareStatement(sql);
             for (int i = 0; i < params.length; i++) {
                 stmt.setObject(i + 1, params[i]);
             }
-            return stmt.executeUpdate();
+            int result = stmt.executeUpdate();
+            // Explicitly commit if auto-commit is disabled
+            if (!conn.getAutoCommit()) {
+                conn.commit();
+            }
+            return result;
+        } catch (SQLException ex) {
+            // Rollback on error if transaction is active
+            if (conn != null && !conn.getAutoCommit()) {
+                try {
+                    conn.rollback();
+                } catch (SQLException rollbackEx) {
+                    System.err.println("[DatabaseRepository] Rollback failed: " + rollbackEx.getMessage());
+                }
+            }
+            throw ex;
+        } finally {
+            if (stmt != null) {
+                try {
+                    stmt.close();
+                } catch (SQLException ignored) {
+                }
+            }
+            if (conn != null) {
+                try {
+                    conn.close();
+                } catch (SQLException ignored) {
+                }
+            }
         }
     }
-    
+
     /**
      * Helper method to query and map results.
      */
     protected List<T> executeQuery(String sql, Object... params) throws SQLException {
         List<T> results = new ArrayList<>();
         try (Connection conn = getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+                PreparedStatement stmt = conn.prepareStatement(sql)) {
             for (int i = 0; i < params.length; i++) {
                 stmt.setObject(i + 1, params[i]);
             }
@@ -178,13 +210,13 @@ public abstract class DatabaseRepository<ID, T> implements Repository<ID, T> {
         }
         return results;
     }
-    
+
     /**
      * Helper to execute query and return single result.
      */
     protected Optional<T> executeSingleQuery(String sql, Object... params) throws SQLException {
         try (Connection conn = getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+                PreparedStatement stmt = conn.prepareStatement(sql)) {
             for (int i = 0; i < params.length; i++) {
                 stmt.setObject(i + 1, params[i]);
             }
